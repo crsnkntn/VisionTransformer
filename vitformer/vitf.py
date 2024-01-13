@@ -17,6 +17,8 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import normalize
 from PIL import Image
 
+device = t.device('cuda' if t.cuda.is_available() else 'cpu')
+
 from dataclasses import dataclass
 @dataclass
 class TFConfig:
