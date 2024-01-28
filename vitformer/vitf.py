@@ -1,27 +1,16 @@
-import math
-import random
-import os
-import csv
-
-import tensorflow as tf
+# Big Libraries
 import torch as t
 import torch.nn as nn
-import numpy as np
-import tqdm.auto as tqdm
-import matplotlib.pyplot as plt
 
-from einops import reduce, rearrange, repeat
+from numpy import sqrt
+from einops import reduce
 from dataclasses import dataclass
-from torch import einsum
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import normalize
-from PIL import Image
 
 device = t.device('cuda' if t.cuda.is_available() else 'cpu')
 
-from dataclasses import dataclass
+# Configuration for a Vision Transformer
 @dataclass
-class TFConfig:
+class ViTConfig:
     debug: bool = False
 
     # The Height and Width of a patch
@@ -122,19 +111,19 @@ class EncoderAttention(nn.Module):
 
     def forward(self, normalized_resid_pre):
         # Calculate query, key and value vectors
-        q = einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Qs) + self.Qbs
-        k = einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Ks) + self.Kbs
-        v = einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Vs) + self.Vbs
+        q = t.einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Qs) + self.Qbs
+        k = t.einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Ks) + self.Kbs
+        v = t.einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Vs) + self.Vbs
 
         # Calculate attention scores, then scale, and apply softmax
-        attn_scores = einsum("b Q h k, b K h k -> b h Q K", q, k)
-        attn_scores = attn_scores / np.sqrt(self.cfg.d_head)
+        attn_scores = t.einsum("b Q h k, b K h k -> b h Q K", q, k)
+        attn_scores = attn_scores / t.sqrt(self.cfg.d_head)
         attn_pattern = attn_scores.softmax(-1)
 
-        z = einsum("b K h k, b h Q K -> b Q h k", v, attn_pattern)
+        z = t.einsum("b K h k, b h Q K -> b Q h k", v, attn_pattern)
 
         # Apply another transformation to convert back to the right dimensions
-        attn_out = einsum("b Q h k, h k d -> b Q d", z, self.O) + self.Ob
+        attn_out = t.einsum("b Q h k, h k d -> b Q d", z, self.O) + self.Ob
 
         return attn_out
 
@@ -173,20 +162,20 @@ class DecoderAttention(nn.Module):
         assert(normalized_resid_pre.shape == encoder_output.shape)
 
         # Calculate query, key matrices from the encoder output
-        q = einsum("b p d, h d k -> b p h k", encoder_output, self.Qs) + self.Qbs
-        k = einsum("b p d, h d k -> b p h k", encoder_output, self.Ks) + self.Kbs
+        q = t.einsum("b p d, h d k -> b p h k", encoder_output, self.Qs) + self.Qbs
+        k = t.einsum("b p d, h d k -> b p h k", encoder_output, self.Ks) + self.Kbs
 
         # Calculate the value matrices from the normalized residual stream
-        v = einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Vs) + self.Vbs
+        v = t.einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Vs) + self.Vbs
 
         # Form the visually appealing attention grid
-        attn_scores = einsum("b Q h k, b K h k -> b h Q K", q, k)
-        attn_scores_masked = self.apply_causal_mask(attn_scores / np.sqrt(self.cfg.d_head))
+        attn_scores = t.einsum("b Q h k, b K h k -> b h Q K", q, k)
+        attn_scores_masked = self.apply_causal_mask(attn_scores / sqrt(self.cfg.d_head))
         attn_pattern = attn_scores_masked.softmax(-1)
 
-        z = einsum("b K h k, b h Q K -> b Q h k", v, attn_pattern)
+        z = t.einsum("b K h k, b h Q K -> b Q h k", v, attn_pattern)
 
-        attn_out = einsum("b Q h k, h k d -> b Q d", z, self.O) + self.Ob
+        attn_out = t.einsum("b Q h k, h k d -> b Q d", z, self.O) + self.Ob
 
         return attn_out, attn_pattern
 
@@ -203,18 +192,23 @@ class DecoderOnlyAttention(nn.Module):
 
         self.cfg = cfg
 
-        # Attention Weights
+        # Query Matrices and Regularizer Values
         self.Qs = nn.Parameter(t.empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
-        self.Ks = nn.Parameter(t.empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
-        self.Vs = nn.Parameter(t.empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
-        self.O = nn.Parameter(t.empty((cfg.n_heads, cfg.d_head, cfg.d_model)))
         self.Qbs = nn.Parameter(t.zeros((cfg.n_heads, cfg.d_head)))
+
+        # Key Matrices and Regularizer Values
+        self.Ks = nn.Parameter(t.empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
         self.Kbs = nn.Parameter(t.zeros((cfg.n_heads, cfg.d_head)))
+
+        # Value Matrices and Regularizer Values
+        self.Vs = nn.Parameter(t.empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
         self.Vbs = nn.Parameter(t.zeros((cfg.n_heads, cfg.d_head)))
-        self.Vbs = nn.Parameter(t.zeros((cfg.n_heads, cfg.d_head)))
+
+        # Query Matrices and Regularizer Values
+        self.O = nn.Parameter(t.empty((cfg.n_heads, cfg.d_head, cfg.d_model)))
         self.Ob = nn.Parameter(t.zeros(cfg.d_model))
 
-        # Initialize the Weights
+        # Initialize Q, K, and V Weights
         nn.init.normal_(self.Qs, std=self.cfg.init_range)
         nn.init.normal_(self.Ks, std=self.cfg.init_range)
         nn.init.normal_(self.Vs, std=self.cfg.init_range)
@@ -229,22 +223,22 @@ class DecoderOnlyAttention(nn.Module):
 
     def forward(self, normalized_resid_pre, isHooked=False):
         # Calculate query, key matrices from the encoder output
-        q = einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Qs) + self.Qbs
-        k = einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Ks) + self.Kbs
+        q = t.einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Qs) + self.Qbs
+        k = t.einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Ks) + self.Kbs
 
         # Calculate the value matrices from the normalized residual stream
-        v = einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Vs) + self.Vbs
+        v = t.einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Vs) + self.Vbs
 
         # Form the visually appealing attention grid
-        attn_scores = einsum("b Q h k, b K h k -> b h Q K", q, k)
-        attn_scores_masked = self.apply_causal_mask(attn_scores / np.sqrt(self.cfg.d_head))
+        attn_scores = t.einsum("b Q h k, b K h k -> b h Q K", q, k)
+        attn_scores_masked = self.apply_causal_mask(attn_scores / sqrt(self.cfg.d_head))
         attn_scores = attn_scores_masked.softmax(-1)
 
         self.attn_cache = attn_scores
 
-        z = einsum("b K h k, b h Q K -> b Q h k", v, self.attn_cache)
+        z = t.einsum("b K h k, b h Q K -> b Q h k", v, self.attn_cache)
 
-        attn_out = einsum("b Q h k, h k d -> b Q d", z, self.O) + self.Ob
+        attn_out = t.einsum("b Q h k, h k d -> b Q d", z, self.O) + self.Ob
 
         return attn_out
 
@@ -257,6 +251,7 @@ class DecoderOnlyAttention(nn.Module):
 
     def get_attn_cache(self):
         return self.attn_cache
+
 
 # Functions that Comprise an Encoder Layer
 class EncoderBlock(nn.Module):
@@ -279,6 +274,7 @@ class EncoderBlock(nn.Module):
         resid_post = self.mlp(normalized_resid_mid) + resid_mid
 
         return resid_post
+
 
 # Functions that Comprise a Decoder Layer
 class DecoderBlock(nn.Module):
@@ -308,6 +304,7 @@ class DecoderBlock(nn.Module):
 
         # Normalize one more time
         return self.ln(residual_post)
+
 
 # Functions that Comprise a Decoder Layer that is not Paired with Encoders
 class DecoderOnlyBlock(nn.Module):
@@ -339,6 +336,7 @@ class DecoderOnlyBlock(nn.Module):
 
     def get_attn_cache(self):
         return self.attn_cache
+
 
 # Embedder for an Image; Turns Images into Embedded Patches
 class Embedder(nn.Module):
@@ -390,12 +388,13 @@ class Unembedder(nn.Module):
         # Flatten the input tensor, why is it shaped so weird
         logits = logits.view(logits.shape[0], -1)
 
-        # Compute the matrix product using einsum and add the bias
-        pred = t.einsum('bi,ij->bj', logits, self.W) + self.b
+        # Compute the matrix product using t.einsum and add the bias
+        pred = t.t.einsum('bi,ij->bj', logits, self.W) + self.b
         return pred
 
-# Functions Comprising a Vision Transformer Algorithm
-class ViTF(nn.Module):
+
+# Vision Transformer Implementation
+class ViT(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
