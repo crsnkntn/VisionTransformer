@@ -72,8 +72,8 @@ class MLP(nn.Module):
         for i in range(self.cfg.n_layers):
           nn.init.normal_(self.fcs1[i].weight, std=self.cfg.init_range)
           nn.init.normal_(self.fcs2[i].weight, std=self.cfg.init_range)
-          nn.init.zeros_(self.fcs1[i].bias)
-          nn.init.zeros_(self.fcs2[i].bias)
+          nn.inizeros_(self.fcs1[i].bias)
+          nn.inizeros_(self.fcs2[i].bias)
 
     def forward(self, x):
         for i in range(self.cfg.n_layers):
