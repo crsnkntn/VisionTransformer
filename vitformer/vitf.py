@@ -389,7 +389,7 @@ class Unembedder(nn.Module):
         logits = logits.view(logits.shape[0], -1)
 
         # Compute the matrix product using t.einsum and add the bias
-        pred = t.t.einsum('bi,ij->bj', logits, self.W) + self.b
+        pred = t.einsum('bi,ij->bj', logits, self.W) + self.b
         return pred
 
 
