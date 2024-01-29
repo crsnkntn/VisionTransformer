@@ -1,7 +1,7 @@
-# Big Libraries
 import torch as t
 import torch.nn as nn
 
+from torch import einsum, zeros, ones, empty
 from numpy import sqrt
 from einops import reduce
 from dataclasses import dataclass
@@ -45,8 +45,8 @@ class LayerNorm(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
-        self.w = nn.Parameter(t.ones(cfg.d_model))
-        self.b = nn.Parameter(t.zeros(cfg.d_model))
+        self.w = nn.Parameter(ones(cfg.d_model))
+        self.b = nn.Parameter(zeros(cfg.d_model))
 
     def forward(self, residual):
         # calculate the standard deviation of each row
@@ -72,8 +72,8 @@ class MLP(nn.Module):
         for i in range(self.cfg.n_layers):
           nn.init.normal_(self.fcs1[i].weight, std=self.cfg.init_range)
           nn.init.normal_(self.fcs2[i].weight, std=self.cfg.init_range)
-          nn.init.zeros_(self.fcs1[i].bias)
-          nn.init.zeros_(self.fcs2[i].bias)
+          nn.inizeros_(self.fcs1[i].bias)
+          nn.inizeros_(self.fcs2[i].bias)
 
     def forward(self, x):
         for i in range(self.cfg.n_layers):
@@ -91,15 +91,15 @@ class EncoderAttention(nn.Module):
         self.cfg = cfg
 
         # Attention Weights
-        self.Qs = nn.Parameter(t.empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
-        self.Ks = nn.Parameter(t.empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
-        self.Vs = nn.Parameter(t.empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
-        self.O = nn.Parameter(t.empty((cfg.n_heads, cfg.d_head, cfg.d_model)))
-        self.Qbs = nn.Parameter(t.zeros((cfg.n_heads, cfg.d_head)))
-        self.Kbs = nn.Parameter(t.zeros((cfg.n_heads, cfg.d_head)))
-        self.Vbs = nn.Parameter(t.zeros((cfg.n_heads, cfg.d_head)))
-        self.Vbs = nn.Parameter(t.zeros((cfg.n_heads, cfg.d_head)))
-        self.Ob = nn.Parameter(t.zeros(cfg.d_model))
+        self.Qs = nn.Parameter(empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
+        self.Ks = nn.Parameter(empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
+        self.Vs = nn.Parameter(empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
+        self.O = nn.Parameter(empty((cfg.n_heads, cfg.d_head, cfg.d_model)))
+        self.Qbs = nn.Parameter(zeros((cfg.n_heads, cfg.d_head)))
+        self.Kbs = nn.Parameter(zeros((cfg.n_heads, cfg.d_head)))
+        self.Vbs = nn.Parameter(zeros((cfg.n_heads, cfg.d_head)))
+        self.Vbs = nn.Parameter(zeros((cfg.n_heads, cfg.d_head)))
+        self.Ob = nn.Parameter(zeros(cfg.d_model))
 
         # Initialize the Weights
         nn.init.normal_(self.Qs, std=self.cfg.init_range)
@@ -111,19 +111,19 @@ class EncoderAttention(nn.Module):
 
     def forward(self, normalized_resid_pre):
         # Calculate query, key and value vectors
-        q = t.einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Qs) + self.Qbs
-        k = t.einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Ks) + self.Kbs
-        v = t.einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Vs) + self.Vbs
+        q = einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Qs) + self.Qbs
+        k = einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Ks) + self.Kbs
+        v = einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Vs) + self.Vbs
 
         # Calculate attention scores, then scale, and apply softmax
-        attn_scores = t.einsum("b Q h k, b K h k -> b h Q K", q, k)
+        attn_scores = einsum("b Q h k, b K h k -> b h Q K", q, k)
         attn_scores = attn_scores / t.sqrt(self.cfg.d_head)
         attn_pattern = attn_scores.softmax(-1)
 
-        z = t.einsum("b K h k, b h Q K -> b Q h k", v, attn_pattern)
+        z = einsum("b K h k, b h Q K -> b Q h k", v, attn_pattern)
 
         # Apply another transformation to convert back to the right dimensions
-        attn_out = t.einsum("b Q h k, h k d -> b Q d", z, self.O) + self.Ob
+        attn_out = einsum("b Q h k, h k d -> b Q d", z, self.O) + self.Ob
 
         return attn_out
 
@@ -135,15 +135,15 @@ class DecoderAttention(nn.Module):
         self.cfg = cfg
 
         # Attention Weights
-        self.Qs = nn.Parameter(t.empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
-        self.Ks = nn.Parameter(t.empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
-        self.Vs = nn.Parameter(t.empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
-        self.O = nn.Parameter(t.empty((cfg.n_heads, cfg.d_head, cfg.d_model)))
-        self.Qbs = nn.Parameter(t.zeros((cfg.n_heads, cfg.d_head)))
-        self.Kbs = nn.Parameter(t.zeros((cfg.n_heads, cfg.d_head)))
-        self.Vbs = nn.Parameter(t.zeros((cfg.n_heads, cfg.d_head)))
-        self.Vbs = nn.Parameter(t.zeros((cfg.n_heads, cfg.d_head)))
-        self.Ob = nn.Parameter(t.zeros(cfg.d_model))
+        self.Qs = nn.Parameter(empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
+        self.Ks = nn.Parameter(empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
+        self.Vs = nn.Parameter(empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
+        self.O = nn.Parameter(empty((cfg.n_heads, cfg.d_head, cfg.d_model)))
+        self.Qbs = nn.Parameter(zeros((cfg.n_heads, cfg.d_head)))
+        self.Kbs = nn.Parameter(zeros((cfg.n_heads, cfg.d_head)))
+        self.Vbs = nn.Parameter(zeros((cfg.n_heads, cfg.d_head)))
+        self.Vbs = nn.Parameter(zeros((cfg.n_heads, cfg.d_head)))
+        self.Ob = nn.Parameter(zeros(cfg.d_model))
 
         # Initialize the Weights
         nn.init.normal_(self.Qs, std=self.cfg.init_range)
@@ -162,25 +162,25 @@ class DecoderAttention(nn.Module):
         assert(normalized_resid_pre.shape == encoder_output.shape)
 
         # Calculate query, key matrices from the encoder output
-        q = t.einsum("b p d, h d k -> b p h k", encoder_output, self.Qs) + self.Qbs
-        k = t.einsum("b p d, h d k -> b p h k", encoder_output, self.Ks) + self.Kbs
+        q = einsum("b p d, h d k -> b p h k", encoder_output, self.Qs) + self.Qbs
+        k = einsum("b p d, h d k -> b p h k", encoder_output, self.Ks) + self.Kbs
 
         # Calculate the value matrices from the normalized residual stream
-        v = t.einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Vs) + self.Vbs
+        v = einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Vs) + self.Vbs
 
         # Form the visually appealing attention grid
-        attn_scores = t.einsum("b Q h k, b K h k -> b h Q K", q, k)
+        attn_scores = einsum("b Q h k, b K h k -> b h Q K", q, k)
         attn_scores_masked = self.apply_causal_mask(attn_scores / sqrt(self.cfg.d_head))
         attn_pattern = attn_scores_masked.softmax(-1)
 
-        z = t.einsum("b K h k, b h Q K -> b Q h k", v, attn_pattern)
+        z = einsum("b K h k, b h Q K -> b Q h k", v, attn_pattern)
 
-        attn_out = t.einsum("b Q h k, h k d -> b Q d", z, self.O) + self.Ob
+        attn_out = einsum("b Q h k, h k d -> b Q d", z, self.O) + self.Ob
 
         return attn_out, attn_pattern
 
     def apply_causal_mask(self, attn_scores: t.Tensor):
-        mask = t.triu(t.ones(attn_scores.size(-2), attn_scores.size(-1), device=attn_scores.device), diagonal=1).bool()
+        mask = t.triu(ones(attn_scores.size(-2), attn_scores.size(-1), device=attn_scores.device), diagonal=1).bool()
 
         attn_scores.masked_fill_(mask, self.IGNORE)
         return attn_scores
@@ -193,20 +193,20 @@ class DecoderOnlyAttention(nn.Module):
         self.cfg = cfg
 
         # Query Matrices and Regularizer Values
-        self.Qs = nn.Parameter(t.empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
-        self.Qbs = nn.Parameter(t.zeros((cfg.n_heads, cfg.d_head)))
+        self.Qs = nn.Parameter(empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
+        self.Qbs = nn.Parameter(zeros((cfg.n_heads, cfg.d_head)))
 
         # Key Matrices and Regularizer Values
-        self.Ks = nn.Parameter(t.empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
-        self.Kbs = nn.Parameter(t.zeros((cfg.n_heads, cfg.d_head)))
+        self.Ks = nn.Parameter(empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
+        self.Kbs = nn.Parameter(zeros((cfg.n_heads, cfg.d_head)))
 
         # Value Matrices and Regularizer Values
-        self.Vs = nn.Parameter(t.empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
-        self.Vbs = nn.Parameter(t.zeros((cfg.n_heads, cfg.d_head)))
+        self.Vs = nn.Parameter(empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
+        self.Vbs = nn.Parameter(zeros((cfg.n_heads, cfg.d_head)))
 
         # Query Matrices and Regularizer Values
-        self.O = nn.Parameter(t.empty((cfg.n_heads, cfg.d_head, cfg.d_model)))
-        self.Ob = nn.Parameter(t.zeros(cfg.d_model))
+        self.O = nn.Parameter(empty((cfg.n_heads, cfg.d_head, cfg.d_model)))
+        self.Ob = nn.Parameter(zeros(cfg.d_model))
 
         # Initialize Q, K, and V Weights
         nn.init.normal_(self.Qs, std=self.cfg.init_range)
@@ -223,27 +223,27 @@ class DecoderOnlyAttention(nn.Module):
 
     def forward(self, normalized_resid_pre, isHooked=False):
         # Calculate query, key matrices from the encoder output
-        q = t.einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Qs) + self.Qbs
-        k = t.einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Ks) + self.Kbs
+        q = einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Qs) + self.Qbs
+        k = einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Ks) + self.Kbs
 
         # Calculate the value matrices from the normalized residual stream
-        v = t.einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Vs) + self.Vbs
+        v = einsum("b p d, h d k -> b p h k", normalized_resid_pre, self.Vs) + self.Vbs
 
         # Form the visually appealing attention grid
-        attn_scores = t.einsum("b Q h k, b K h k -> b h Q K", q, k)
+        attn_scores = einsum("b Q h k, b K h k -> b h Q K", q, k)
         attn_scores_masked = self.apply_causal_mask(attn_scores / sqrt(self.cfg.d_head))
         attn_scores = attn_scores_masked.softmax(-1)
 
         self.attn_cache = attn_scores
 
-        z = t.einsum("b K h k, b h Q K -> b Q h k", v, self.attn_cache)
+        z = einsum("b K h k, b h Q K -> b Q h k", v, self.attn_cache)
 
-        attn_out = t.einsum("b Q h k, h k d -> b Q d", z, self.O) + self.Ob
+        attn_out = einsum("b Q h k, h k d -> b Q d", z, self.O) + self.Ob
 
         return attn_out
 
     def apply_causal_mask(self, attn_scores: t.Tensor):
-        mask = t.triu(t.ones(attn_scores.size(-2), attn_scores.size(-1), device=attn_scores.device), diagonal=1).bool()
+        mask = t.triu(ones(attn_scores.size(-2), attn_scores.size(-1), device=attn_scores.device), diagonal=1).bool()
 
         attn_scores.masked_fill_(mask, self.IGNORE)
         return attn_scores
@@ -379,8 +379,8 @@ class Unembedder(nn.Module):
     def __init__(self, n_classes, init_range):
         super().__init__()
         # Define the parameters and initialize
-        self.W = nn.Parameter(t.empty(49 * 16, n_classes))
-        self.b = nn.Parameter(t.zeros(n_classes))
+        self.W = nn.Parameter(empty(49 * 16, n_classes))
+        self.b = nn.Parameter(zeros(n_classes))
 
         nn.init.normal_(self.W, std=init_range)
 
@@ -388,8 +388,8 @@ class Unembedder(nn.Module):
         # Flatten the input tensor, why is it shaped so weird
         logits = logits.view(logits.shape[0], -1)
 
-        # Compute the matrix product using t.einsum and add the bias
-        pred = t.einsum('bi,ij->bj', logits, self.W) + self.b
+        # Compute the matrix product using einsum and add the bias
+        pred = einsum('bi,ij->bj', logits, self.W) + self.b
         return pred
 
 
