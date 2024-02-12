@@ -136,7 +136,7 @@ class CachedDecoderAttention(nn.Module):
 
         self.activations['attention_grid'] = attn_scores.detach().cpu()
 
-        z = einsum("b K h k, b h Q K -> b Q h k", v, self.attn_cache)
+        z = einsum("b K h k, b h Q K -> b Q h k", v, self.attn_scores)
 
         attn_out = einsum("b Q h k, h k d -> b Q d", z, self.O) + self.Ob
 
