@@ -69,11 +69,11 @@ class CachedMLP(nn.Module):
         self.fcs2 = nn.ModuleList([nn.Linear(cfg.d_mlp, cfg.d_model) for _ in range(cfg.n_mlp_layers)])
         self.relu = nn.ReLU()
 
-        for i in range(self.cfg.n_layers):
-          nn.init.normal_(self.fcs1[i].weight, std=self.cfg.init_range)
-          nn.init.normal_(self.fcs2[i].weight, std=self.cfg.init_range)
-          nn.init.zeros_(self.fcs1[i].bias)
-          nn.init.zeros_(self.fcs2[i].bias)
+        for i in range(self.cfg.n_mlp_layers):
+            nn.init.normal_(self.fcs1[i].weight, std=self.cfg.init_range)
+            nn.init.normal_(self.fcs2[i].weight, std=self.cfg.init_range)
+            nn.init.zeros_(self.fcs1[i].bias)
+            nn.init.zeros_(self.fcs2[i].bias)
 
         self.activations = {}
 
