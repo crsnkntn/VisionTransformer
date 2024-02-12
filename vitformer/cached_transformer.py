@@ -23,10 +23,6 @@ class Config:
     # Base value to prevent division by zero
     ln_eps: float = 1e-5
 
-    # The weight initialization range [-init_range, init_range]
-    # Using Xavier Initialization
-    init_range: float = np.sqrt(d_mlp)**-1
-
     # The number of attention heads in each layer
     n_heads: int = 12
 
@@ -36,6 +32,10 @@ class Config:
     # MLP parameters
     d_mlp: int = 248
     n_mlp_layers: int = 1
+
+    # The weight initialization range [-init_range, init_range]
+    # Using Xavier Initialization
+    init_range: float = np.sqrt(d_mlp)**-1
 
     # The number of classes, or the output size of the unembedder
     n_classes: int = 27
@@ -154,9 +154,9 @@ class CachedDecoderBlock(nn.Module):
         super().__init__()
         # Objects needed by a decoder block
         self.ln1 = LayerNorm(cfg)
-        self.attn = DecoderOnlyAttention(cfg)
+        self.attn = CachedDecoderAttention(cfg)
         self.ln2 = LayerNorm(cfg)
-        self.mlp = MLP(cfg)
+        self.mlp = CachedMLP(cfg)
 
         # Stores attention from the last inference
         self.activations = {}
