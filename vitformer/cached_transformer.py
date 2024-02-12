@@ -82,7 +82,7 @@ class CachedMLP(nn.Module):
           x = self.fcs1[i](x)
           x = self.relu(x)
           x = self.fcs2[i](x)
-          self.activations[f'mlp_layer{i}'] = x
+          self.activations[f'mlp_layer{i}'] = x.detach().cpu()
 
         return x
 
@@ -134,7 +134,7 @@ class CachedDecoderAttention(nn.Module):
         attn_scores_masked = self.apply_causal_mask(attn_scores / sqrt(self.cfg.d_head))
         attn_scores = attn_scores_masked.softmax(-1)
 
-        self.activations['attention_grid'] = attn_scores
+        self.activations['attention_grid'] = attn_scores.detach().cpu()
 
         z = einsum("b K h k, b h Q K -> b Q h k", v, self.attn_cache)
 
@@ -172,9 +172,27 @@ class CachedDecoderBlock(nn.Module):
 
         resid_post = self.mlp(normalized_resid_mid) + resid_mid
 
-        self.activations = {**self.mlp.activations, **self.attn.activations}
+        self.activations = {**self.mlp.activations.detach().cpu(), **self.attn.activations.detach().cpu()}.detach().cpu()
 
         return resid_post
+
+class Unembedder(nn.Module):
+    def __init__(self, n_classes, init_range):
+        super().__init__()
+        # Define the parameters and initialize
+        self.W = nn.Parameter(empty(49 * 16, n_classes))
+        self.b = nn.Parameter(zeros(n_classes))
+
+        nn.init.normal_(self.W, std=init_range)
+
+    def forward(self, logits):
+        # Flatten the input tensor, why is it shaped so weird
+        logits = logits.view(logits.shape[0], -1)
+
+        # Compute the matrix product using einsum and add the bias
+        pred = einsum('bi,ij->bj', logits, self.W) + self.b
+        return pred
+
 
 # Vision Transformer Implementation
 class CachedTransformer(nn.Module):
@@ -184,7 +202,7 @@ class CachedTransformer(nn.Module):
 
         # Create the necessary objects
         self.unembedder = Unembedder(cfg.n_classes, cfg.init_range)
-        self.decoder_blocks = nn.ModuleList([DecoderBlock(cfg) for _ in range(cfg.n_layers)])
+        self.decoder_blocks = nn.ModuleList([CachedDecoderBlock(cfg) for _ in range(cfg.n_layers)])
         self.ln_final = LayerNorm(cfg)
 
         self.activations = []
