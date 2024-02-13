@@ -172,7 +172,7 @@ class CachedDecoderBlock(nn.Module):
 
         resid_post = self.mlp(normalized_resid_mid) + resid_mid
 
-        self.activations = {**self.mlp.activations.detach().cpu(), **self.attn.activations.detach().cpu()}.detach().cpu()
+        self.activations = {**self.mlp.activations, **self.attn.activations}
 
         return resid_post
 
